@@ -1,43 +1,44 @@
-// API for adding doctor 
+// controllers/adminController.js
 import validator from 'validator';
 import bcrypt from 'bcrypt';
 import { v2 as cloudinary } from 'cloudinary';
 import doctormodel from '../Models/doctormodel.js';
- import jwt from 'jsonwebtoken';
+import jwt from 'jsonwebtoken';
+
+// -----------------------------
+// Add Doctor API
+// -----------------------------
 const addDoctor = async (req, res) => {
     try {
-        // Extract body values
+        console.log('Request body:', req.body);
+        console.log('Request file:', req.file);
+
         const {
             name,
             email,
-            specialization,
+            speciality,  // frontend sends "speciality"
             degree,
             experience,
             about,
-            availability,
-            fee,
+            availability = "Available",
+            fees,
             address,
             slots_booked,
             password
         } = req.body;
 
-        const imagefile = req.file; // For multer file upload
+        const imagefile = req.file; // multer file: field name "docimg"
+
+        // Map frontend fields to DB
+        const specialization = speciality;
+        const fee = fees;
 
         // -----------------------------
-        // 1️ Validate required fields
+        // Validate required fields
         // -----------------------------
         if (
-            !name ||
-            !email ||
-            !specialization ||
-            !degree ||
-            !experience ||
-            !about ||
-            !availability ||
-            !fee ||
-            !address ||
-            !password ||
-            !imagefile
+            !name || !email || !specialization || !degree || !experience ||
+            !about || !fee || !address || !password || !imagefile
         ) {
             return res.status(400).json({
                 success: false,
@@ -59,68 +60,53 @@ const addDoctor = async (req, res) => {
         }
 
         // -----------------------------
-        // 2️ Email validation
+        // Email validation
         // -----------------------------
         if (!validator.isEmail(email)) {
-            return res.status(400).json({
-                success: false,
-                message: "Invalid email format"
-            });
+            return res.status(400).json({ success: false, message: "Invalid email format" });
         }
 
         // -----------------------------
-        // 3️ Password validation
+        // Password validation
         // -----------------------------
         if (password.length < 6) {
-            return res.status(400).json({
-                success: false,
-                message: "Password must be at least 6 characters long"
-            });
+            return res.status(400).json({ success: false, message: "Password must be at least 6 characters long" });
         }
 
         // -----------------------------
-        // 4️ Hash the password
+        // Hash the password
         // -----------------------------
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
 
         // -----------------------------
-        // 5️ Upload image to Cloudinary
+        // Upload image to Cloudinary
         // -----------------------------
         const uploadedImg = await cloudinary.uploader.upload(imagefile.path, {
             resource_type: "image",
-            folder: "doctors" // Organize images in a folder
+            folder: "doctors"
         });
 
         const imageURL = uploadedImg.secure_url;
-
-        // Validate that we got a proper URL
         if (!imageURL || !imageURL.startsWith('https://')) {
-            return res.status(500).json({
-                success: false,
-                message: "Failed to upload image to Cloudinary"
-            });
+            return res.status(500).json({ success: false, message: "Failed to upload image to Cloudinary" });
         }
 
-        console.log('Image uploaded successfully:', imageURL);
-
         // -----------------------------
-        // 6️ Prepare final doctor object
+        // Parse address JSON
         // -----------------------------
-        
-        // Parse address if it's a string
         let parsedAddress = address;
         if (typeof address === 'string') {
             try {
                 parsedAddress = JSON.parse(address);
             } catch (e) {
-                return res.status(400).json({
-                    success: false,
-                    message: "Invalid address format. Must be valid JSON"
-                });
+                return res.status(400).json({ success: false, message: "Invalid address format. Must be valid JSON" });
             }
         }
-        
+
+        // -----------------------------
+        // Prepare doctor object
+        // -----------------------------
         const doctorData = {
             name,
             email,
@@ -136,21 +122,13 @@ const addDoctor = async (req, res) => {
             slots_booked: slots_booked ? JSON.parse(slots_booked) : {},
             date: Date.now()
         };
-        
-        console.log('Doctor data prepared:', { ...doctorData, password: '[HIDDEN]' });
 
         // -----------------------------
-        // 7️ Save to database
+        // Save to database
         // -----------------------------
         const newDoctor = new doctormodel(doctorData);
         await newDoctor.save();
 
-        // -----------------------------
-        // 8️ Success response
-        // -----------------------------
-        console.log('Doctor saved successfully with ID:', newDoctor._id);
-        console.log('Image URL saved:', newDoctor.image);
-        
         return res.status(201).json({
             success: true,
             message: "Doctor added successfully",
@@ -158,50 +136,43 @@ const addDoctor = async (req, res) => {
         });
 
     } catch (error) {
-        console.error(error);
-        return res.status(500).json({
-            success: false,
-            message: "Error adding doctor",
-            error: error.message
-        });
+        console.error("Add Doctor Error:", error);
+        return res.status(500).json({ success: false, message: "Error adding doctor", error: error.message });
     }
 };
- // ApI FOR THE  admin login 
 
- const loginadmin = async (req, res) => {
-   try {
-    const { email, password } = req.body;
+// -----------------------------
+// Admin Login API
+// -----------------------------
+const loginadmin = async (req, res) => {
+    try {
+        const { email, password } = req.body;
 
-    if (email === process.env.ADMIN_EMAIL && password === process.env.ADMIN_PASSWORD) {
+        if (email === process.env.ADMIN_EMAIL && password === process.env.ADMIN_PASSWORD) {
+            const token = jwt.sign({ email }, process.env.JWT_SECRET, { expiresIn: '1d' });
+            return res.json({ success: true, message: "Admin logged in successfully", token });
+        } else {
+            return res.json({ success: false, message: "Invalid admin credentials" });
+        }
 
-        const token = jwt.sign(
-            { email },
-            process.env.JWT_SECRET,
-            { expiresIn: '1d' }
-        );
-
-        res.json({
-            success: true,
-            message: "Admin logged in successfully",
-            token
-        });
-
-    } else {
-        res.json({
-            success: false,
-            message: "Invalid admin credentials"
-        });
+    } catch (error) {
+        console.error("Admin Login Error:", error);
+        return res.status(500).json({ success: false, message: "Error logging in admin", error: error.message });
     }
-} catch (error) {
-    console.log(error);
-    res.status(500).json({
-        success: false,
-        message: "Error logging in admin",
-        error: error.message
-    });
+};
+
+// -----------------------------
+//API to get all doctors list 
+
+const allDoctors = async (req, res) => {
+    try {
+        const doctors =await doctormodel.find({}).select('-password').sort({ date: -1 });
+        res.json({ success: true, doctors });
+
+    } catch (error) {
+        console.error("Get All Doctors Error:", error);
+        return res.status(500).json({ success: false, message: "Error fetching doctors", error: error.message });
+    }
 }
 
-}
-
-
-export { addDoctor,loginadmin };
+export { addDoctor, loginadmin, allDoctors };
