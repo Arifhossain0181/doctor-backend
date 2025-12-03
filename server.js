@@ -21,6 +21,14 @@ const port = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 
+// Log all incoming requests
+app.use((req, res, next) => {
+    console.log(`\n🔵 ${req.method} ${req.url}`);
+    console.log('Headers:', req.headers);
+    console.log('Body:', req.body);
+    next();
+});
+
 // aPi endpoints
 app.use('/api/admin', adminRouter);
 
