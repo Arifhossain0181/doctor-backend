@@ -90,7 +90,7 @@ const loginUser = async (req, res) => {
 
 const getUserProfile = async (req, res) => {
     try {
-        const { userId } = req.user.id;
+        const userId = req.userId;
         const userdata = await UserModel.findById(userId).select('-password -__v');
         if (!userdata) {
             return res.status(404).json({ success: false, message: "User not found" });
@@ -106,7 +106,8 @@ const getUserProfile = async (req, res) => {
 //API update user profile
 const updateUserProfile = async (req, res) => {
     try{
-        const { userId, name, address, dob, gender, phone } = req.body;
+        const userId = req.userId;
+        const { name, address, dob, gender, phone } = req.body;
         const imagefile = req.file;
 
         if(!name || !phone || !dob || !gender){

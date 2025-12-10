@@ -7,10 +7,9 @@ const authuser = (req, res, next) => {
         if (!token) return res.status(401).json({ success: false, message: "Not authorized, login again" });
 
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        req.body.userId= decoded.id;
+        req.userId = decoded.id;
        
-
-        console.log('User authenticated:', decoded.email);
+        console.log('User authenticated:', decoded.id);
         next();
     } catch (error) {
         console.error('Auth error:', error.message);
