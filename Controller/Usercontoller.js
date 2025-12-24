@@ -233,4 +233,29 @@ export const listAppointments = async (req, res) => {
          res.json({ success: false, message: "Failed to fetch appointments", error: error.message });
     }
 }
+export  const  cancelAPPointment = async (req, res) => {
+  try{
+    const {userId, appointmentId} = req.body;
+    const appointmentData = await AppointmentModel.findById(appointmentId);
+    //vrify appointment belongs to user
+    if(appointmentData.userId.toString() !== userId){
+      return res.json({ success: false, message: "Unauthorized action" });
+      
+    }
+    await AppointmentModel.findByIdAndDelete(appointmentId,{cancelled:true})
+    ;
+    // release booked slot in doctor model slots_booked
+    const {doctorId , slotDate, slotTime} = appointmentData;
+    const doctor = await doctormodel.findById(doctorId);
+    let slots_booked = doctor.slots_booked || {};
+    slots_booked[slotDate] = slots_booked[slotDate].filter(e=> e !== slotTime);
+    await doctormodel.findByIdAndUpdate(doctorId, {slots_booked});
+    res.json({ success: true, message: "Appointment cancelled successfully" });
+
+  }
+  catch(error){
+    console.error("Cancel Appointment Error:", error);
+    res.json({ success: false, message: "Failed to cancel appointment", error: error.message });
+  }
+}
 
