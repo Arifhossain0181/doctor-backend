@@ -1,107 +1,97 @@
 import DoctorModel from "../Models/doctormodel.js";
+import AppointmentModel from "../Models/aPPointmentModel.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import AppointmentModel from "../Models/aPPointmentModel.js";
-const changeavilability = async (req, res) => {
+
+// get all doctors list
+export const doctorlist = async (req, res) => {
   try {
-    const { docId } = req.body;
-
-    if (!docId) {
-      return res.status(400).json({ success: false, message: "Doctor ID is required" });
-    }
-
-    const docdata = await DoctorModel.findById(docId);
-    
-    if (!docdata) {
-      return res.status(404).json({ success: false, message: "Doctor not found" });
-    }
-
-    await DoctorModel.findByIdAndUpdate(docId, {
-      available: !docdata.available,
-    });
-
-    res.status(200).json({ 
-      success: true, 
-      message: "Availability changed successfully",
-      available: !docdata.available 
-    });
+    const doctors = await DoctorModel.find({ available: true }).select("-password -email");
+    res.json({ success: true, doctors });
   } catch (error) {
-    console.error("Change Availability Error:", error);
-    res.status(500).json({ 
-      success: false, 
-      message: "Failed to change availability",
-      error: error.message 
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
-const doctorlist = async (req, res) => {
-    try{
-        const doctors = await DoctorModel.find({}).select(['-password', '-email']);
-        
-        res.status(200).json({ success: true, doctors });
-        
-    }
-    catch(error){
-       console.error("Fetch Doctors Error:", error);
-        res.status(500).json({ success: false, message: "Failed to fetch doctors", error: error.message });
-    }
-}
-// doctor to login 
-const doctorlogin = async (req, res) => {
-  try{
+// doctor login
+export const doctorlogin = async (req, res) => {
+  try {
     const { email, password } = req.body;
-    const doctor = await DoctorModel.findOne({ email });
-    if(!doctor){
-      return res.status(401).json({ success: false, message: "Invalid email or password" });
-    }
-    const isMatch = await bcrypt.compare(password, doctor.password);
 
-    if(isMatch){
-      const token = jwt.sign({id: doctor._id}, process.env.JWT_SECRET, {expiresIn: '1d'});
-      
-      // Return doctor data without password
-      const doctorData = {
+    const doctor = await DoctorModel.findOne({ email });
+    if (!doctor) {
+      return res.json({ success: false, message: "Invalid credentials" });
+    }
+
+    const isMatch = await bcrypt.compare(password, doctor.password);
+    if (!isMatch) {
+      return res.json({ success: false, message: "Invalid credentials" });
+    }
+
+    const token = jwt.sign({ id: doctor._id }, process.env.JWT_SECRET, {
+      expiresIn: "1d",
+    });
+
+    res.json({
+      success: true,
+      token,
+      doctor: {
         _id: doctor._id,
         name: doctor.name,
-        email: doctor.email,
-        specialization: doctor.specialization,
-        degree: doctor.degree,
-        experience: doctor.experience,
-        about: doctor.about,
-        fees: doctor.fees,
-        address: doctor.address,
-        available: doctor.available,
-        image: doctor.image
-      };
-      
-      res.json({ success: true, message: "Login successful", token, doctor: doctorData });
-      return;
+        image: doctor.image,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// change doctor availability
+export const changeavilability = async (req, res) => {
+  try {
+    const { doctorId } = req.body;
+    
+    const doctor = await DoctorModel.findById(doctorId);
+    if (!doctor) {
+      return res.json({ success: false, message: "Doctor not found" });
+    }
+
+    await DoctorModel.findByIdAndUpdate(doctorId, { available: !doctor.available });
+    
+    res.json({ success: true, message: "Availability updated" });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// get doctor appointments
+export const appointmentsdoctor = async (req, res) => {
+  try {
+    const appointments = await AppointmentModel.find({
+      doctorId: req.doctorId,
+    }).sort({ date: -1 });
+
+    res.json({ success: true, appointments });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// API to mark appointment as completed by doctor Panel
+export const markappointmentcompleted = async (req, res) => {
+  try {
+    const { doctorId,appointmentId } = req.body; 
+    const appointment = await AppointmentModel.findById({  appointmentId });
+    if(appointment && appointment.doctorId.toString() === doctorId ){
+      await AppointmentModel.findByIdAndUpdate( appointmentId, { status: 'completed' });
+    
     }
     else{
-      return res.status(401).json({ success: false, message: "Invalid email or password" });
+      return res.status(404).json({ success: false, message: "Appointment not found or unauthorized" });
     }
-
-    
-  }
-  catch(error){
-    console.error("Doctor Login Error:", error);
-   res.status(500).json({ success: false, message: "Login failed", error: error.message });
-   toast.error("Login failed"); 
+    res.json({ success: true, message: "Appointment marked as completed" });
+  } 
+  catch (error) {
+    res.status(500).json({ success: false, message: error.message });
   }
 }
-
-//aPi to get doctor aointmensts for doctor Panel
-const appointmentsdoctor = async (req, res) => {
-  try{
-    const doctorId = req.doctorId;
-    const appointments = await AppointmentModel.find({doctorId :req.doctorId.tostring()});
-    res.status(200).json({ success: true, appointments });
-  }
-  catch(error){
-    console.error("Fetch Appointments Error:", error);
-    res.status(500).json({ success: false, message: "Failed to fetch appointments", error: error.message });
-  }
-}
-
-export { changeavilability, doctorlist, doctorlogin, appointmentsdoctor };
